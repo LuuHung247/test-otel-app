@@ -5,6 +5,7 @@ namespace: monitoring
 
 resources:
   - namespace.yaml
+  - repos.yaml
   - grafana-loki-bloom.yaml
   - kube-prometheus-stack.yaml
   - grafana-tempo.yaml
