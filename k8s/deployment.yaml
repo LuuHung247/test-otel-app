@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-otel-app
+  namespace: monitoring
+  labels:
+    app: test-otel-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-otel-app
+  template:
+    metadata:
+      labels:
+        app: test-otel-app
+    spec:
+      containers:
+      - name: test-otel-app
+        image: test-otel-app:1.0.0  # Replace with your image
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        # OpenTelemetry Configuration
+        - name: OTEL_SERVICE_NAME
+          value: "test-otel-app"
+        
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.namespace=monitoring,deployment.environment=test"
+        
+        # OTLP Exporter Configuration
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://open-telemetry-opentelemetry-collector.monitoring.svc.cluster.local:4318"
+        
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: "http/protobuf"
+        
+        # Logs Configuration
+        - name: OTEL_LOGS_EXPORTER
+          value: "otlp"
+        
+        # Metrics Configuration (optional)
+        - name: OTEL_METRICS_EXPORTER
+          value: "otlp"
+        
+        # Traces Configuration (optional)
+        - name: OTEL_TRACES_EXPORTER
+          value: "otlp"
+        
+        # Sampling Configuration
+        - name: OTEL_TRACES_SAMPLER
+          value: "parentbased_traceidratio"
+        
+        - name: OTEL_TRACES_SAMPLER_ARG
+          value: "1.0"
+        
+        # Java-specific configurations
+        - name: OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED
+          value: "true"
+        
+        - name: OTEL_INSTRUMENTATION_COMMON_LOGGING_ENABLED
+          value: "true"
+        
+        # Enable all instrumentations
+        - name: OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED
+          value: "true"
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
