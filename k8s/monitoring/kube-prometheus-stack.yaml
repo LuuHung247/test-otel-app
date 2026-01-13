@@ -1,0 +1,119 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-community-repo
+  namespace: monitoring
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: helm
+  url: https://prometheus-community.github.io/helm-charts
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test-app-kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: kube-prometheus-stack
+    repoURL: https://prometheus-community.github.io/helm-charts
+    targetRevision: 78.3.0
+    helm:
+      releaseName: kube-prometheus-stack
+      valuesObject:
+        defaultRules:
+          create: true
+          rules:
+            alertmanager: true
+            etcd: false
+            general: true
+            k8s: true
+            kubeApiserver: true
+            kubeApiserverAvailability: true
+            kubeApiserverError: true
+            kubeApiserverSlos: true
+            kubelet: true
+            kubePrometheusGeneral: true
+            kubePrometheusNodeAlerting: true
+            kubePrometheusNodeRecording: true
+            kubernetesAbsent: true
+            kubernetesApps: true
+            kubernetesResources: true
+            kubernetesStorage: true
+            kubernetesSystem: true
+            kubeScheduler: true
+            kubeStateMetrics: true
+            network: true
+            node: true
+            prometheus: true
+            prometheusOperator: true
+            time: true
+        alertmanager:
+          enabled: false
+        grafana:
+          enabled: true
+          serviceAccount:
+            create: true
+            name: grafana
+          adminPassword: admin
+          persistence:
+            enabled: true
+            size: 1Gi
+          additionalDataSources:
+            - name: Loki-Bloom
+              type: loki
+              url: http://grafana-loki-bloom:3100
+              access: proxy
+              isDefault: false
+              jsonData:
+                maxLines: 1000
+            - name: Tempo
+              type: tempo
+              url: http://grafana-tempo:3100
+              access: proxy
+              isDefault: false
+          service:
+            type: NodePort
+            nodePort: 30080
+        prometheusOperator:
+          enabled: true
+        prometheus:
+          enabled: true
+          service:
+            type: NodePort
+            nodePort: 30090
+          prometheusSpec:
+            enableAdminAPI: false
+            enableRemoteWriteReceiver: true
+            retention: 7d
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 5Gi
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - Validate=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    automated:
+      prune: true
+      selfHeal: false
+    retry:
+      limit: 1
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 3
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: monitoring

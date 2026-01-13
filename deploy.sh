@@ -1,54 +1,14 @@
 #!/bin/bash
 
-set -e
+# This is a wrapper script that calls deploy-all.sh
+# You can also use deploy-monitoring.sh or deploy-app.sh separately
 
-IMAGE_NAME="test-otel-app"
-IMAGE_TAG="1.0.0"
-NAMESPACE="monitoring"
-
-echo "=================================="
-echo "Building and Deploying $IMAGE_NAME"
-echo "=================================="
-
-# Build Docker image
-echo "1. Building Docker image..."
-docker build -t $IMAGE_NAME:$IMAGE_TAG .
-
-# Check if using Minikube
-if command -v minikube &> /dev/null && minikube status &> /dev/null; then
-    echo "2. Loading image to Minikube..."
-    minikube image load $IMAGE_NAME:$IMAGE_TAG
-else
-    echo "2. Minikube not detected, skipping image load..."
-    echo "   If using a registry, push image manually:"
-    echo "   docker push your-registry/$IMAGE_NAME:$IMAGE_TAG"
-fi
-
-# Deploy to Kubernetes
-echo "3. Deploying to Kubernetes..."
-kubectl apply -k k8s/
-
-# Wait for deployment
-echo "4. Waiting for deployment to be ready..."
-kubectl wait --for=condition=ready pod -l app=$IMAGE_NAME -n $NAMESPACE --timeout=120s
-
-# Show status
-echo "5. Deployment status:"
-kubectl get pods -n $NAMESPACE -l app=$IMAGE_NAME
-kubectl get svc -n $NAMESPACE $IMAGE_NAME
-
+echo "This script will deploy the complete observability stack."
 echo ""
-echo "=================================="
-echo "Deployment completed!"
-echo "=================================="
+echo "Other options:"
+echo "  - ./deploy-monitoring.sh  : Deploy only monitoring stack"
+echo "  - ./deploy-app.sh         : Deploy only the application"
+echo "  - ./deploy-all.sh         : Deploy everything (this script)"
 echo ""
-echo "To test the application:"
-echo "  kubectl port-forward -n $NAMESPACE svc/$IMAGE_NAME 8080:8080"
-echo ""
-echo "Then visit:"
-echo "  curl http://localhost:8080/api/hello"
-echo "  curl http://localhost:8080/api/logs/all"
-echo "  curl http://localhost:8080/api/simulate/traffic?count=50"
-echo ""
-echo "View logs in Grafana with query:"
-echo "  {service_name=\"$IMAGE_NAME\"}"
+
+./deploy-all.sh

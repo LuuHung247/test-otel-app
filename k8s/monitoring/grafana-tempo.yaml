@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-repo
+  namespace: monitoring
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: helm
+  url: https://grafana.github.io/helm-charts
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test-app-grafana-tempo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+spec:
+  project: default
+  source:
+    chart: tempo
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 1.23.3
+    helm:
+      releaseName: grafana-tempo
+      valuesObject:
+        annotations:
+          argocd.argoproj.io/compare-options: IgnoreExtraneous
+        replicas: 1
+        revisionHistoryLimit: 3
+        tempo:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          memBallastSizeMbs: 512
+          retention: 168h # 7 days
+          storage:
+            trace:
+              backend: s3
+              s3:
+                access_key: "root-user"
+                secret_key: "supersecretpassword"
+                bucket: "tempo"
+                endpoint: "grafana-loki-bloom-minio:9000"
+                insecure: true
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: "0.0.0.0:4317"
+                http:
+                  endpoint: "0.0.0.0:4318"
+          global_overrides:
+            max_bytes_per_trace: 100000000 # limit max size to 100Mb
+        serviceAccount:
+          create: false
+          name: null
+          annotations: {}
+          automountServiceAccountToken: true
+        persistence:
+          enabled: false
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - Validate=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 1
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 3
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: monitoring

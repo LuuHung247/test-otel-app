@@ -1,0 +1,91 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: open-telemetry-repo
+  namespace: monitoring
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: helm
+  url: https://open-telemetry.github.io/opentelemetry-helm-charts
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test-app-open-telemetry
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: opentelemetry-collector
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    targetRevision: 0.136.1
+    helm:
+      releaseName: test-app-otel
+      valuesObject:
+        replicaCount: 1
+        mode: "deployment"
+        presets:
+          kubernetesAttributes:
+            enabled: true
+        image:
+          repository: otel/opentelemetry-collector-contrib
+          tag: 0.137.0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi          
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        config:
+          exporters:
+            prometheusremotewrite/local:
+              tls:
+                insecure: true
+              endpoint: http://kube-prometheus-stack-prometheus:9090/api/v1/write
+            otlphttp/logs:
+              tls:
+                insecure: true
+              endpoint: http://grafana-loki-bloom:3100/otlp
+            otlp/tempo:
+              endpoint: grafana-tempo:4317
+              tls:
+                insecure: true
+          service:
+            pipelines:
+              logs:
+                receivers: [otlp]
+                processors: [batch]
+                exporters:
+                  - otlphttp/logs
+              metrics:
+                exporters:
+                  - prometheusremotewrite/local
+                receivers:
+                  - otlp
+              traces:
+                exporters:
+                  - otlp/tempo             
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - Validate=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    automated:
+      prune: true
+      selfHeal: false
+    retry:
+      limit: 1
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 3
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: monitoring
